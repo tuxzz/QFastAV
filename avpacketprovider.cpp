@@ -130,7 +130,7 @@ void AVPacketProvider::run()
       AVPacket *packet = av_packet_alloc();
       av_init_packet(packet);
 
-      // demux ans enqueue packet
+      // demux and enqueue packet
       {
         int packetReadingResult = av_read_frame(m_pFormatCtx, packet);
         int iStream = packet->stream_index;
