@@ -162,7 +162,6 @@ void AVPacketProvider::run()
     m_syncer.wait(&m_locker);
   }
 cleanUp:
-  m_fullyStarted = true;
   m_syncer.wakeAll();
   m_locker.unlock();
   exit();
