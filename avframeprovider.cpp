@@ -4,7 +4,6 @@
 #include "avpacketdecoder.hpp"
 #include "privateutil.hpp"
 #include <QDebug>
-#include <QElapsedTimer>
 
 IMPL_EXCEPTION(IOError, std::runtime_error)
 IMPL_EXCEPTION(NoStreamError, std::runtime_error)
@@ -59,9 +58,10 @@ AVFrameProvider::AVFrameProvider(const QString &path, bool enableAudio, bool ena
     m_file.seek(0);
 
     AVProbeData probeData;
+    memset(reinterpret_cast<void*>(&probeData), 0, sizeof(probeData));
     probeData.buf = m_ioBuffer;
     probeData.buf_size = realReadSize;
-    probeData.filename = "";
+    probeData.filename = "aaa";
     AVInputFormat *pInputFormat = av_probe_input_format(&probeData, 1);
     if(!pInputFormat)
       throw IOError("Unsupported input format");
@@ -89,9 +89,9 @@ AVFrameProvider::AVFrameProvider(const QString &path, bool enableAudio, bool ena
   {
     AVStream *pStream = m_pFormatCtx->streams[i];
 
-    if(enableVideo && !m_pVideoStream && pStream->codec->codec_type == AVMEDIA_TYPE_VIDEO)
+    if(enableVideo && !m_pVideoStream && pStream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
     {
-      if(pStream->codec)
+      if(pStream->codecpar)
       {
         m_iVideoStream = i;
         m_pVideoStream = pStream;
@@ -99,9 +99,9 @@ AVFrameProvider::AVFrameProvider(const QString &path, bool enableAudio, bool ena
       else
         qWarning("Unsupported video codec at stream #%d.", i);
     }
-    else if(enableAudio && !m_pAudioStream && pStream->codec->codec_type == AVMEDIA_TYPE_AUDIO)
+    else if(enableAudio && !m_pAudioStream && pStream->codecpar->codec_type == AVMEDIA_TYPE_AUDIO)
     {
-      if(pStream->codec)
+      if(pStream->codecpar)
       {
         m_iAudioStream = i;
         m_pAudioStream = pStream;
@@ -110,59 +110,12 @@ AVFrameProvider::AVFrameProvider(const QString &path, bool enableAudio, bool ena
         qWarning("Unsupported audio codec at stream #%d.", i);
     }
     else
-    {
-      char buf[4096] = {'\x00'};
-      if(pStream->codec)
-        avcodec_string(buf, 4096, pStream->codec, 0);
-      else
-        std::strcpy(buf, "(no codec)");
-      qWarning("Unsupported stream #%d: %s", i, buf);
-    }
+      qWarning("Unsupported stream #%d.", i);
   }
 
   // check stream
   if(!m_pAudioStream && !m_pVideoStream)
     throw NoStreamError("No stream available.");
-
-  // open video codec
-  if(m_pVideoStream)
-  {
-    m_pVideoStream->codec->thread_count = av_cpu_count();
-    m_pVideoStream->codec->thread_type = FF_THREAD_FRAME;
-
-    AVCodec *codec = avcodec_find_decoder(m_pVideoStream->codec->codec_id);
-    if(codec)
-    {
-      int openVideoCodecResult = avcodec_open2(m_pVideoStream->codec, codec, nullptr);
-      CHECK_AVRESULT(openVideoCodecResult, openVideoCodecResult == 0);
-    }
-    else
-    {
-      qWarning("Unsupported video codec.");
-      m_iVideoStream = AVERROR_STREAM_NOT_FOUND;
-      m_pVideoStream = nullptr;
-    }
-  }
-
-  // open audio codec
-  if(m_pAudioStream)
-  {
-    m_pAudioStream->codec->thread_count = av_cpu_count();
-    m_pAudioStream->codec->thread_type = FF_THREAD_FRAME;
-
-    AVCodec *codec = avcodec_find_decoder(m_pAudioStream->codec->codec_id);
-    if(codec)
-    {
-      int openAudioCodecResult = avcodec_open2(m_pAudioStream->codec, codec, nullptr);
-      CHECK_AVRESULT(openAudioCodecResult, openAudioCodecResult == 0);
-    }
-    else
-    {
-      qWarning("Unsupported video codec.");
-      m_iAudioStream = AVERROR_STREAM_NOT_FOUND;
-      m_pAudioStream = nullptr;
-    }
-  }
 
   // alloc frame
   if(m_pVideoStream)
@@ -398,13 +351,13 @@ double AVFrameProvider::videoFramerate() const
 QSize AVFrameProvider::videoSize() const
 {
   Q_ASSERT(hasVideo());
-  return QSize(m_pVideoStream->codec->width, m_pVideoStream->codec->height);
+  return QSize(m_pVideoStream->codecpar->width, m_pVideoStream->codecpar->height);
 }
 
 AVPixelFormat AVFrameProvider::videoPixelFormat() const
 {
   Q_ASSERT(hasVideo());
-  return m_pVideoStream->codec->pix_fmt;
+  return static_cast<AVPixelFormat>(m_pVideoStream->codecpar->format);
 }
 
 bool AVFrameProvider::hasAudio() const
@@ -413,13 +366,13 @@ bool AVFrameProvider::hasAudio() const
 int AVFrameProvider::audioSamprate() const
 {
   Q_ASSERT(hasAudio());
-  return m_pAudioStream->codec->sample_rate;
+  return m_pAudioStream->codecpar->sample_rate;
 }
 
 AVSampleFormat AVFrameProvider::audioSampleFormat() const
 {
   Q_ASSERT(hasAudio());
-  return m_pAudioStream->codec->sample_fmt;
+  return static_cast<AVSampleFormat>(m_pAudioStream->codecpar->format);
 }
 
 int AVFrameProvider::_ioReadPacket(void *opaque, uint8_t *buf, int buf_size)

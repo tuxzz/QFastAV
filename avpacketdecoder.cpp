@@ -8,14 +8,58 @@ AVPacketDecoder::AVPacketDecoder(AVPacketProvider *packetProvider, AVFormatConte
   for(int iStream:streamSet)
   {
     Q_ASSERT(iStream >= 0 && iStream < static_cast<int>(pFormatCtx->nb_streams));
-    AVCodecContext *pCodecCtx = pFormatCtx->streams[iStream]->codec;
+    AVStream *pStream = pFormatCtx->streams[iStream];
+    AVCodecParameters *pCodecPar = pStream->codecpar;
+
+    // find decoder
+    AVCodec *pCodec = avcodec_find_decoder(pStream->codecpar->codec_id);
+    if(!pCodec)
+    {
+      qCritical("Could not found available codec for stream %d.", iStream);
+      throw FFmpegError("Could not found available codec.");
+    }
+
+    // create codec context
+    AVCodecContext *pCodecCtx = avcodec_alloc_context3(pCodec);
+    if(!pCodecCtx)
+    {
+      qCritical("Could not alloc codec context for stream %d.", iStream);
+      throw FFmpegError("Could not alloc codec context.");
+    }
+    {
+      int parToCtxResult = avcodec_parameters_to_context(pCodecCtx, pCodecPar);
+      CHECK_AVRESULT(parToCtxResult, parToCtxResult >= 0);
+    }
+
+    // set parameter
+    av_codec_set_pkt_timebase(pCodecCtx, pStream->time_base);
+    if(pCodecPar->codec_type == AVMEDIA_TYPE_VIDEO)
+      pCodecCtx->thread_count = av_cpu_count();
+    else
+      pCodecCtx->thread_count = av_cpu_count() / 2;
+    pCodecCtx->thread_type = FF_THREAD_FRAME;
+
+    // open codec
+    {
+      lockFFmpeg();
+      int codecOpenResult = avcodec_open2(pCodecCtx, pCodec, nullptr);
+      unlockFFmpeg();
+      CHECK_AVRESULT(codecOpenResult, codecOpenResult == 0);
+    }
+
     m_streamDict.insert(iStream, pCodecCtx);
   }
   m_fullyStarted = false;
 }
 
 AVPacketDecoder::~AVPacketDecoder()
-{}
+{
+  for(AVCodecContext *pCodecCtx:m_streamDict)
+  {
+    avcodec_close(pCodecCtx);
+    avcodec_free_context(&pCodecCtx);
+  }
+}
 
 QMutex *AVPacketDecoder::locker()
 { return &m_locker; }

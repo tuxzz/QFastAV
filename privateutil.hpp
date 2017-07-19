@@ -12,3 +12,6 @@ if(!(successCond)) \
   qCritical("[%s:%s:%d]Operation failed: %s", __FILE__, __func__, __LINE__, _buf); \
   throw FFmpegError("FFmpeg operation failed."); \
 }
+
+void lockFFmpeg();
+void unlockFFmpeg();

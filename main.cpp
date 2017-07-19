@@ -17,7 +17,7 @@ int main(int argc, char *argv[])
   QGuiApplication app(argc, argv);
 
   AVProvider provider(true, true);
-  provider.addToPlayQueue("D:/muz/muz0/ヒトリエ - non-fiction four e.p/02.Inaikara.flac");
+  provider.addToPlayQueue("D:/muz/muz0/例大祭11 Rebirth Story Ⅱ/Disc 1/05.Once Upon a Love.flac");
   provider.addToPlayQueue("D:/muz/muz0/センスレス·ワンダー/センスレス·ワンダー.flac");
   QElapsedTimer t;
   double peak = 0.0;
