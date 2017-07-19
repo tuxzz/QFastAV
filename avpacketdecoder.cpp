@@ -118,7 +118,7 @@ void AVPacketDecoder::run()
             av_packet_unref(packet);
             av_packet_free(&packet);
             if(sendPacketResult == AVERROR_EOF)
-              qWarning("Audio EOF too early");
+              qWarning("Stream %d EOF too early", iStream);
             else if(sendPacketResult < 0)
               CHECK_AVRESULT(sendPacketResult, false);
           }
