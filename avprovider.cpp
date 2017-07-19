@@ -4,7 +4,6 @@
 #include <QMutex>
 #include <QWaitCondition>
 #include <QVarLengthArray>
-#include <QElapsedTimer>
 
 struct Ticket
 {
@@ -285,7 +284,6 @@ bool AVProvider::nextFrame()
 
 void AVProvider::_preload()
 {
-  int i = m_iCurrentPlaying;
   int preloaded = 0;
 
   // clean flags
@@ -293,18 +291,18 @@ void AVProvider::_preload()
     item->availableProvider = 0;
 
   // keep provider
-  while(preloaded < m_maxPreloadCount)
   {
-    PlayQueueItem *item = m_playQueue.at(i);
-
-    if(item->providerQueue.size() < i + 1)
+    int i = m_iCurrentPlaying;
+    while(preloaded < m_maxPreloadCount)
     {
-      item->providerQueue.enqueue(m_ticketProvider->createTicket(item->path));
-    }
-    ++item->availableProvider;
+      PlayQueueItem *item = m_playQueue.at(i);
 
-    ++preloaded;
-    i = (i + 1) % m_playQueue.size();
+      if(item->providerQueue.size() < ++item->availableProvider)
+        item->providerQueue.enqueue(m_ticketProvider->createTicket(item->path));
+
+      ++preloaded;
+      i = (i + 1) % m_playQueue.size();
+    }
   }
 
   // request stop unused
